@@ -211,6 +211,8 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_tls_diagnostics.py $<TARGET_FILE:relinker>)
         add_test(NAME linux_load_alignment COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_linux_load_alignment.py $<TARGET_FILE:relinker>)
+        add_test(NAME linux_eh_frame_header COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_linux_eh_frame_header.py $<TARGET_FILE:relinker>)
         add_test(NAME linux_dynamic_strings COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_linux_dynamic_strings.py $<TARGET_FILE:relinker>)
         add_test(NAME executable_segments COMMAND ${Python3_EXECUTABLE}
@@ -264,6 +266,15 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/io/include
     )
     add_test(NAME windows_icon_resource COMMAND windows_icon_resource_tests)
+
+    add_test_executable(entry_stub_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/elfpatcher/tests/EntryStubTests.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/elfpatcher/src/general/EntryStubBuilder.cpp
+    )
+    target_include_directories(entry_stub_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/elfpatcher/include
+    )
+    add_test(NAME entry_stub COMMAND entry_stub_tests)
 
     add_test_executable(strict_nid_filter_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/StrictNidFilterTests.cpp
