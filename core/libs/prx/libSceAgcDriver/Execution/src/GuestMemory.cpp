@@ -1833,6 +1833,14 @@ void WriteChanged(std::uint64_t address, std::span<const std::byte> current, std
         const auto length = std::min(block, size - at);
         return std::memcmp(current.data() + at, original.data() + at, length) != 0;
     };
+    // Runs are found a word at a time: an equal word is skipped and a word whose bytes all differ
+    // extends the run, so only a run's edges are compared byte by byte.
+    const auto word = [](std::span<const std::byte> bytes, std::size_t at) {
+        std::uint64_t value;
+        std::memcpy(&value, bytes.data() + at, sizeof(value));
+        return value;
+    };
+    const auto allBytesDiffer = [](std::uint64_t x) { return ((x - 0x0101010101010101ull) & ~x & 0x8080808080808080ull) == 0; };
     // Stamped like a GPU write: a collect memoized for this packet would not see the page fault.
     storeOwn(address, size, [&] {
         std::size_t firstChanged = size;
@@ -1841,8 +1849,11 @@ void WriteChanged(std::uint64_t address, std::span<const std::byte> current, std
             if (!differs(at)) continue;
             const auto blockEnd = std::min(at + block, size);
             for (std::size_t run = at; run < blockEnd;) {
-                if (current[run] == original[run]) { ++run; continue; }
+                while (run + 8 <= blockEnd && word(current, run) == word(original, run)) run += 8;
+                while (run < blockEnd && current[run] == original[run]) ++run;
+                if (run == blockEnd) break;
                 auto runEnd = run + 1;
+                while (runEnd + 8 <= blockEnd && allBytesDiffer(word(current, runEnd) ^ word(original, runEnd))) runEnd += 8;
                 while (runEnd < blockEnd && current[runEnd] != original[runEnd]) ++runEnd;
                 std::memcpy(destination + run, current.data() + run, runEnd - run);
                 firstChanged = std::min(firstChanged, run);
