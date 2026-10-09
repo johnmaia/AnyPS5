@@ -3305,7 +3305,7 @@ void VulkanDevice::decideIndirect(RecordedDispatch& record, IndirectOutcome& out
     record.arguments = 0;
     timer.indirect = false;
     std::snprintf(groupsText, 40, "%ux%ux%u", record.x, record.y, record.z);
-    if (record.x > limit[0] || record.y > limit[1] || record.z > limit[2]) throw std::runtime_error("Vulkan dispatch: workgroup count exceeds device limits");
+    if (record.x > limit[0] || record.y > limit[1] || record.z > limit[2]) throw std::runtime_error(std::string("Vulkan dispatch: indirect workgroup count ") + groupsText + " exceeds device limits");
 }
 
 void VulkanDevice::recordDispatch(RecordedDispatch& record) {
