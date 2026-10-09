@@ -232,6 +232,10 @@ bool PreparedAtUse(const ShaderSnapshot& snapshot, const ShaderRecompiler::Recom
         APS5_LOG_ERR("The null pixel program has no wave%u artifact for this draw; preparing it at draw", request.context.waveSize);
         return true;
     }
+    if (request.context.vertex && request.context.vertex->paClVsOutCntl != 0) {
+        APS5_LOG_ERR("Vertex program 0x%llx has no artifact for position export layout 0x%08x; preparing it at draw", static_cast<unsigned long long>(snapshot.codeAddress), request.context.vertex->paClVsOutCntl);
+        return true;
+    }
     if (!snapshot.header.empty()) return snapshot.prepared->deferred;
     if (snapshot.type != 0 || request.shader.stage != ShaderRecompiler::ShaderStage::Compute) throw std::runtime_error("AGC driver: unregistered program is not a compute shader");
     APS5_LOG_ERR("Compute shader 0x%llx was not registered; preparing its artifact at dispatch", static_cast<unsigned long long>(snapshot.codeAddress));
