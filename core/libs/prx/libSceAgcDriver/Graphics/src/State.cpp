@@ -803,7 +803,13 @@ ColorTarget DecodeColorBuffer(const Registers& cx, std::uint32_t slot) {
     const auto view = read(cx, 0x31b + stride);
     Require((view & ~0x3fffffffu) == 0, "reserved CB_COLOR_VIEW bits are set");
     const auto slice = view & 0x1fffu;
-    Require(slice == ((view >> 13u) & 0x1fffu), "color views of several array slices are unsupported");
+    if (slice != ((view >> 13u) & 0x1fffu)) {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::fprintf(stderr, "[gpu] TESTING ONLY: a layered color view (CB_COLOR_VIEW 0x%08x) renders into its first slice only (#2102)\n", view);
+        }
+    }
     const auto viewMip = (view >> 26u) & 0xfu;
     zero(cx, 0x31d + stride, ~0x20000u, "color samples, fragments or destination alpha override");
     const auto attrib2 = read(cx, 0x3b0 + slot);
@@ -815,7 +821,7 @@ ColorTarget DecodeColorBuffer(const Registers& cx, std::uint32_t slot) {
     Require(((attrib3 >> 24u) & 3u) != 0u || (attrib2 & 0x3fffu) == 0u, "1D color targets taller than one row are unsupported");
     if (volume) {
         color.depth = (attrib3 & 0x1fffu) + 1u;
-        Require(maxMip == 0 && (info & 0x10000000u) == 0, "mipmapped or DCC 3D color targets are unsupported");
+        Require(maxMip == 0, "mipmapped 3D color targets are unsupported");
         Require(slice < color.depth, "the color view slice is beyond the 3D surface");
         color.depthSlice = slice;
     }
@@ -860,7 +866,7 @@ ColorTarget DecodeColorBuffer(const Registers& cx, std::uint32_t slot) {
         color.cmaskBytes = CmaskBytes(color.extent.width, color.extent.height);
         GuestMemory::CheckRange(reinterpret_cast<const void*>(color.cmaskAddress), color.cmaskBytes, CmaskLayout::Alignment, true);
     }
-    if ((info & 0x10000000u) != 0) {
+    if ((info & 0x10000000u) != 0 && !volume) {
         if (maxMip == 0) {
             const auto dccHigh = find(cx, 0x3a8 + slot);
             color.dccAddress = ((dccHigh == cx.end() ? 0ull : static_cast<std::uint64_t>(dccHigh->second & 0xffu)) << 40u) | (static_cast<std::uint64_t>(read(cx, 0x325 + stride)) << 8u);
