@@ -25,6 +25,7 @@
 #include <condition_variable>
 #include <iterator>
 #include <map>
+#include <optional>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -788,7 +789,12 @@ void refreshHeapMirrors(std::vector<ImageMirror*>& mirrors, std::vector<RefreshB
         while (last < mirrors.size() && mirrors[last]->base == mirrors[last - 1]->base + mirrors[last - 1]->bytes) ++last;
         const auto begin = mirrors[first]->base;
         const auto bytes = mirrors[last - 1]->base + mirrors[last - 1]->bytes - begin;
-        prepareRange(begin, bytes);
+        {
+            static const bool bdaFlush = std::getenv("APS5_BDA_FLUSH") != nullptr;
+            std::optional<StorageTexture::HeapRefreshScope> heap;
+            if (!bdaFlush) heap.emplace(begin, static_cast<std::size_t>(bytes));
+            prepareRange(begin, bytes);
+        }
         const auto generation = GuestMemory::CollectWrites(begin, static_cast<std::size_t>(bytes));
         Require(generation != 0, "a heap mirror's range is no longer write-watched");
         for (auto index = first; index < last; ++index) {
