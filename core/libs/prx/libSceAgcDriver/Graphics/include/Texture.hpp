@@ -211,6 +211,17 @@ public:
     // does when it lists no image, and all an access AccessKeptByCpu approved needs): whether any
     // unit was published.
     static bool PublishShadowsOnly(std::uint64_t address, std::size_t bytes, PublishScope scope, const char* reason = "memory access");
+    class HeapRefreshScope {
+    public:
+        HeapRefreshScope(std::uint64_t address, std::size_t bytes);
+        ~HeapRefreshScope();
+        HeapRefreshScope(const HeapRefreshScope&) = delete;
+        HeapRefreshScope& operator=(const HeapRefreshScope&) = delete;
+        static bool Covers(std::uint64_t address, std::size_t bytes);
+
+    private:
+        std::pair<std::uint64_t, std::size_t> previous;
+    };
     // For the [hooksync] recorded-store line: images a FlushPending stored after a hook skip of
     // theirs (AccessKeptByCpu), of which by the hook for the same read site as the last skip; 10 s deltas.
     struct HookSkipCounts {

@@ -65,6 +65,7 @@ TextureProfile& Profile() {
 // FlushPending that forced the write-back (the other callers name themselves: "refresh", "cache
 // eviction", "explicit"). `flushReason` is set by the caller around its writeBack calls.
 thread_local const char* flushReason = nullptr;
+thread_local std::pair<std::uint64_t, std::size_t> heapRefresh{0, 0};
 // Likewise what made an upload necessary: "first" (a new image), "keys" (the DCC keys changed),
 // "cpu" (a CPU store stamped a changed unit), "flushed" (another image's results were stored over
 // the surface by this refresh), "store" (a driver store: a fill, a copy, a label, an earlier
@@ -2508,6 +2509,18 @@ bool StorageTexture::FlushPending(std::uint64_t address, std::size_t bytes, cons
         if (published != nullptr) *published = units != 0;
     }
     return true;
+}
+
+StorageTexture::HeapRefreshScope::HeapRefreshScope(std::uint64_t address, std::size_t bytes) : previous(heapRefresh) {
+    heapRefresh = {address, bytes};
+}
+
+StorageTexture::HeapRefreshScope::~HeapRefreshScope() {
+    heapRefresh = previous;
+}
+
+bool StorageTexture::HeapRefreshScope::Covers(std::uint64_t address, std::size_t bytes) {
+    return bytes != 0 && heapRefresh.first == address && heapRefresh.second == bytes;
 }
 
 bool StorageTexture::PublishShadowsOnly(std::uint64_t address, std::size_t bytes, PublishScope scope, const char* reason) {

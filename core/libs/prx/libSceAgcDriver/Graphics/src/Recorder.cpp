@@ -1043,8 +1043,9 @@ void FlushForAccess(std::uint64_t address, std::size_t bytes) {
     // publish is all FlushPending would do (one registry scan, not two).
     bool stored = false;
     std::size_t images = 0, evicted = 0;
-    const bool kept = !HookFlushCpuBlocks() && StorageTexture::AccessKeptByCpu(address, bytes, &images, &evicted);
-    if (kept || (images == 0 && !HookFlushCpuBlocks())) {
+    const bool heap = StorageTexture::HeapRefreshScope::Covers(address, bytes);
+    const bool kept = !heap && !HookFlushCpuBlocks() && StorageTexture::AccessKeptByCpu(address, bytes, &images, &evicted);
+    if (heap || kept || (images == 0 && !HookFlushCpuBlocks())) {
         published = StorageTexture::PublishShadowsOnly(address, bytes, scope);
         if (kept && HookSyncProfiled()) CountRecordedStoreSkip(RecordedStoreKey(), evicted);
     } else {
