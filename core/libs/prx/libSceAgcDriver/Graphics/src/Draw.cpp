@@ -2385,9 +2385,8 @@ void RunColorMetadataPass(const Context& context, const ColorMetadataPass& pass)
                 std::snprintf(text, sizeof(text), " 0x%02zx:%zu", value, histogram[value]);
                 values += text;
             }
-            std::fprintf(stderr, "[gpu] TESTING ONLY: CB metadata pass over mixed DCC keys kept the resident texels and marked the keys uncompressed: color 0x%llx %ux%u format %d mips %u mip %u, %zu keys at 0x%llx,%s\n", static_cast<unsigned long long>(color.address), color.extent.width, color.extent.height, static_cast<int>(color.format), color.mipCount, color.mip, count, static_cast<unsigned long long>(color.dccAddress), values.c_str());
+            std::fprintf(stderr, "[gpu] TESTING ONLY: CB metadata pass over mixed DCC keys kept the resident texels and left the keys: color 0x%llx %ux%u format %d mips %u mip %u, %zu keys at 0x%llx,%s\n", static_cast<unsigned long long>(color.address), color.extent.width, color.extent.height, static_cast<int>(color.format), color.mipCount, color.mip, count, static_cast<unsigned long long>(color.dccAddress), values.c_str());
             if (const auto resident = metadataPassResident(context, color)) resident->MarkDirty();
-            MarkDccUncompressed(context, color.dccAddress, color.bytes, count);
             continue;
         }
         Require(IsDccClear(keys), std::string("CB metadata pass over DCC keys that are ") + DccKeysName(keys) + " (per-block metadata is not modeled)");
