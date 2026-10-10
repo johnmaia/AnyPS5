@@ -264,7 +264,6 @@ void lowerPackedAncillary(IrProgram& program, IrBuilder& builder, IrValue& ancil
         };
         collectExtracts(collectExtracts, ancillary);
         direct = std::move(extracts);
-        forwarded.clear();
     }
     std::array<IrValue*, 2> fields {};
     const auto field = [&](std::size_t index) -> IrValue& {
