@@ -630,6 +630,23 @@ bool runCovers(const GuestAllocations::Lease& lease, std::uint64_t begin, std::u
     return !run.ranges.empty() && end <= run.base + run.bytes;
 }
 
+GuestAllocations::Lease leaseAround(std::uint64_t address) {
+    const auto window = importWindow.load(std::memory_order_relaxed);
+    const auto low = window != 0 ? address / window * window : 0;
+    const auto high = window != 0 ? low + window : std::numeric_limits<std::uint64_t>::max();
+    return GuestAllocations::GuestAllocationsAcquireAround_nid_postfix(address, low, high);
+}
+
+bool importRefused(const Context& context, const HostImports& state, std::uint64_t begin, std::uint64_t end) {
+    const auto run = importRun(leaseAround(begin), begin);
+    if (run.ranges.empty() || end > run.base + run.bytes) return true;
+    const auto next = state.imports.lower_bound(run.base);
+    if (next != state.imports.end() && next->first < run.base + run.bytes) return false;
+    if (next != state.imports.begin() && std::prev(next)->second.base + std::prev(next)->second.bytes > run.base) return false;
+    const auto alignment = context.hostImportAlignment;
+    return alignment == 0 || run.base % alignment != 0 || run.bytes % alignment != 0 || state.failed.contains(run.base);
+}
+
 template<typename Entry>
 bool sameRun(const Entry& entry, const ImportRun& run) {
     if (run.base != entry.base || run.bytes != entry.bytes || run.ranges.size() != entry.ranges.size()) return false;
@@ -2008,6 +2025,7 @@ const HostImport* HostImportFor(const Context& context, std::uint64_t address, s
     // A hit is only valid while the registry has not changed since the imports were reconciled.
     if (!importsStale(context, state)) {
         if (const auto* entry = findImport(state, address, address + bytes)) return entry;
+        if (importRefused(context, state, address, address + bytes)) return nullptr;
     }
     const auto lease = GuestAllocations::GuestAllocationsAcquire_nid_postfix();
     refreshImports(context, state, lease);
@@ -2993,7 +3011,7 @@ void GuestBufferMemory::UploadFinish(bool addressable) {
             const HostImport* entry = region.direct != nullptr && state.epoch == importsEpoch ? region.direct : nullptr;
             region.direct = nullptr;
             if (entry == nullptr) entry = findImport(state, region.begin, region.end);
-            if (entry == nullptr) {
+            if (entry == nullptr && !importRefused(context, state, region.begin, region.end)) {
                 if (runCovers(importRanges(), region.begin, region.end)) entry = importAllocation(context, state, region.begin, importRanges());
             }
             // A staged region (see stagingEligible) is copied out of the import even when aligned;

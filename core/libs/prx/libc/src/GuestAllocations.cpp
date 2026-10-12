@@ -550,6 +550,26 @@ std::shared_ptr<const Range> GuestAllocationsLookup_nid_postfix(std::uintptr_t a
     return nullptr;
 }
 
+Lease GuestAllocationsAcquireAround_nid_postfix(std::uint64_t address, std::uint64_t low, std::uint64_t high) {
+    std::lock_guard lock(registry().mutex);
+    const auto& ranges = registry().ranges;
+    const auto readable = [](const Range& range) { return range.readable && range.bytes != 0; };
+    const auto found = ranges.upper_bound(address);
+    if (found == ranges.begin()) return {};
+    auto first = std::prev(found);
+    if (!readable(*first->second) || address >= first->first + first->second->bytes) return {};
+    auto last = first;
+    while (first != ranges.begin()) {
+        const auto before = std::prev(first);
+        if (!readable(*before->second) || before->first < low || before->first + before->second->bytes != first->first) break;
+        first = before;
+    }
+    for (auto after = std::next(last); after != ranges.end() && readable(*after->second) && after->first == last->first + last->second->bytes && after->first + after->second->bytes <= high; ++after) last = after;
+    auto result = std::make_shared<Lease::Ranges>();
+    for (auto it = first; it != std::next(last); ++it) result->push_back(it->second);
+    return Lease(std::move(result));
+}
+
 Lease GuestAllocationsAcquireAll_nid_postfix() {
     std::lock_guard lock(registry().mutex);
     if (auto shared = registry().allLease.lock()) return Lease(std::move(shared));

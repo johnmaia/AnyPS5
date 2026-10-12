@@ -652,6 +652,37 @@ static void CheckGpuAccessFollowsProtection() {
     Require(sceKernelMunmap(flexible, page) == 0);
 }
 
+static void CheckAcquireAroundFollowsTheRun() {
+    constexpr std::size_t page = 0x4000;
+    void* mapped = nullptr;
+    Require(sceKernelMapNamedFlexibleMemory(&mapped, page * 4, 3, 0, "around") == 0);
+    const auto base = reinterpret_cast<std::uint64_t>(mapped);
+    Require(sceKernelMprotect(static_cast<char*>(mapped) + page, page, 1) == 0);
+    Require(sceKernelMprotect(static_cast<char*>(mapped) + page * 3, page, 0) == 0);
+    const auto addresses = [](const GuestAllocations::Lease& lease) {
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> result;
+        for (const auto& range : lease) result.emplace_back(range->address, range->bytes);
+        return result;
+    };
+    {
+        const auto all = GuestAllocations::GuestAllocationsAcquire_nid_postfix();
+        const auto containing = std::find_if(all.begin(), all.end(), [&](const auto& range) { return base + page >= range->address && base + page - range->address < range->bytes; });
+        Require(containing != all.end());
+        auto first = containing;
+        while (first != all.begin() && (*std::prev(first))->address + (*std::prev(first))->bytes == (*first)->address) --first;
+        auto last = containing;
+        while (std::next(last) != all.end() && (*last)->address + (*last)->bytes == (*std::next(last))->address) ++last;
+        const auto around = GuestAllocations::GuestAllocationsAcquireAround_nid_postfix(base + page, 0, std::numeric_limits<std::uint64_t>::max());
+        Require(addresses(around) == addresses(GuestAllocations::Lease(std::make_shared<const GuestAllocations::Lease::Ranges>(first, std::next(last)))));
+        Require(!around.empty() && around.back()->address + around.back()->bytes == base + page * 3);
+        const auto windowed = GuestAllocations::GuestAllocationsAcquireAround_nid_postfix(base + page, base + page, base + page * 3);
+        Require(addresses(windowed) == std::vector<std::pair<std::uint64_t, std::uint64_t>>{{base + page, page}, {base + page * 2, page}});
+        Require(GuestAllocations::GuestAllocationsAcquireAround_nid_postfix(base + page * 3, 0, std::numeric_limits<std::uint64_t>::max()).empty());
+    }
+    Require(sceKernelMunmap(mapped, page * 4) == 0);
+    Require(GuestAllocations::GuestAllocationsAcquireAround_nid_postfix(base + page, 0, std::numeric_limits<std::uint64_t>::max()).empty());
+}
+
 static std::vector<std::pair<std::uintptr_t, std::size_t>> gpuMapped;
 
 static std::atomic<bool> observerEntered{false};
@@ -2157,6 +2188,7 @@ int main() {
     CheckFixedMappingOverHoleInsideAllocation();
     CheckDirectMemoryGpuProtBits();
     CheckGpuAccessFollowsProtection();
+    CheckAcquireAroundFollowsTheRun();
     CheckGpuMapsAreObserved();
     CheckClearingTheObserverWaitsForItsCalls();
     CheckHintedVirtualReservation();
